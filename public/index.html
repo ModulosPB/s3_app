@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Alumnos - Instituto</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f7f6;
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        .form-container {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #2c3e50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #34495e;
+        }
+        .alumnos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .alumno-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .alumno-card:hover {
+            transform: translateY(-5px);
+        }
+        .alumno-img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            background-color: #eee;
+        }
+        .alumno-info h3 {
+            margin: 10px 0 5px 0;
+            color: #2c3e50;
+        }
+        .alumno-info p {
+            margin: 0;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        .btn-delete {
+            background-color: #e74c3c;
+            margin-top: 15px;
+            padding: 8px 15px;
+            font-size: 14px;
+        }
+        .btn-delete:hover {
+            background-color: #c0392b;
+        }
+        .loading {
+            text-align: center;
+            font-style: italic;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Registro de Alumnos</h1>
+
+    <div class="form-container">
+        <form id="alumnoForm">
+            <div class="form-group">
+                <label for="nombre">Nombre:</label>
+                <input type="text" id="nombre" name="nombre" required>
+            </div>
+            <div class="form-group">
+                <label for="apellidos">Apellidos:</label>
+                <input type="text" id="apellidos" name="apellidos" required>
+            </div>
+            <div class="form-group">
+                <label for="localidad">Localidad:</label>
+                <input type="text" id="localidad" name="localidad" required>
+            </div>
+            <div class="form-group">
+                <label for="imagen">Imagen:</label>
+                <input type="file" id="imagen" name="imagen" accept="image/*" required>
+            </div>
+            <button type="submit">Agregar Alumno</button>
+        </form>
+    </div>
+
+    <hr>
+
+    <h2>Fichas de Alumnos</h2>
+    <div id="alumnosGrid" class="alumnos-grid">
+        <p class="loading">Cargando alumnos...</p>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+
+        async function fetchAlumnos() {
+            const grid = document.getElementById('alumnosGrid');
+            try {
+                const response = await fetch(`${API_URL}/alumnos`);
+                const alumnos = await response.json();
+                
+                grid.innerHTML = '';
+                
+                if (alumnos.length === 0) {
+                    grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">No hay alumnos registrados.</p>';
+                    return;
+                }
+
+                alumnos.forEach(alumno => {
+                    const card = document.createElement('div');
+                    card.className = 'alumno-card';
+                    
+                    // Usamos el endpoint proxy para la imagen
+                    const imageUrl = `${API_URL}/imagen/${alumno.imagen}`;
+                    
+                    card.innerHTML = `
+                        <img src="${imageUrl}" alt="${alumno.nombre}" class="alumno-img" onerror="this.src='https://via.placeholder.com/200?text=Sin+Imagen'">
+                        <div class="alumno-info">
+                            <h3>${alumno.nombre} ${alumno.apellidos}</h3>
+                            <p><strong>ID:</strong> ${alumno.id}</p>
+                            <p><strong>Localidad:</strong> ${alumno.localidad}</p>
+                            <button class="btn-delete" onclick="deleteAlumno(${alumno.id})">Eliminar Alumno</button>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error:', error);
+                grid.innerHTML = '<p style="color: red; text-align: center;">Error al cargar los datos.</p>';
+            }
+        }
+
+        async function deleteAlumno(id) {
+            if (!confirm('¿Estás seguro de que deseas eliminar este alumno? Esta acción también borrará su foto de S3.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/alumnos/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('Alumno eliminado con éxito');
+                    fetchAlumnos();
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + error.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al conectar con el servidor');
+            }
+        }
+
+        document.getElementById('alumnoForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = e.target.querySelector('button');
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Enviando...';
+
+            const formData = new FormData(e.target);
+
+            try {
+                const response = await fetch(`${API_URL}/alumnos`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    alert('Alumno agregado con éxito');
+                    e.target.reset();
+                    fetchAlumnos();
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + error.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al conectar con el servidor');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Agregar Alumno';
+            }
+        });
+
+        // Carga inicial
+        fetchAlumnos();
+    </script>
+</body>
+</html>
